@@ -51,7 +51,7 @@ n_subjects = length(results);
 gc_results = struct();
 
 %% Loop through subjects
-for s = 1 %1:n_subjects
+for s = 1:n_subjects
  
     subj = results(s);
     fprintf('\n=== Processing %s | %s | dream=%d ===\n', ...
@@ -146,6 +146,43 @@ for s = 1 %1:n_subjects
             gc_results(s).(elec) = [];
             continue
         end
+
+        % -----------------------------------------------------------------
+        % Step 2b: Autoregressive prediction accuracy (ARP)
+        % ARP_brain (per band): how self-predictable is EEG band power?
+        % ARP_heart:            how self-predictable is HF-HRV?
+        % -----------------------------------------------------------------
+ 
+        n_vars = size(X, 1);  % = 6
+        ARP    = nan(n_vars, 1);
+ 
+        for v = 1:n_vars
+            x_v      = squeeze(X(v, :));              % [1 x n_beats]
+            x_v_mvgc = reshape(x_v, 1, n_beats, 1);  % [1 x n_beats x 1]
+            try
+                [A_uni, SIG_uni] = tsdata_to_var(x_v_mvgc, mord, regmode);
+                if ~isbad(A_uni)
+                    resid_var  = SIG_uni;       % scalar: residual variance of univariate AR
+                    total_var  = var(x_v);      % total variance of the series
+                    if total_var > 0
+                        ARP(v) = 1 - (resid_var / total_var);
+                    end
+                end
+            catch
+                % Leave as NaN if univariate fit fails for this variable
+            end
+        end
+ 
+        % Store ARP — variable order matches X rows: 1-5 = EEG bands, 6 = HRV
+        gc_results(s).(elec).ARP_delta = ARP(1);
+        gc_results(s).(elec).ARP_theta = ARP(2);
+        gc_results(s).(elec).ARP_alpha = ARP(3);
+        gc_results(s).(elec).ARP_sigma = ARP(4);
+        gc_results(s).(elec).ARP_beta  = ARP(5);
+        gc_results(s).(elec).ARP_HRV   = ARP(6);
+ 
+        fprintf('  %s: ARP_HRV = %.4f | ARP_delta = %.4f | ARP_beta = %.4f\n', ...
+            elec, ARP(6), ARP(1), ARP(5));
  
         % -----------------------------------------------------------------
         % Step 3: Autocovariance sequence
@@ -166,7 +203,11 @@ for s = 1 %1:n_subjects
         end
  
         if info.warnings
-            fprintf('  WARNING for %s %s: %s\n', subj.subject_id, elec, info.warnmsg);
+            if iscell(info.warnmsg)
+                warnstr = strjoin(info.warnmsg, '; ');
+            else
+                warnstr = info.warnmsg;
+            end;
             % Continue but flag in output
             gc_results(s).(elec).acov_warning = info.warnmsg;
         end
@@ -265,7 +306,9 @@ fprintf('\nGC results saved to gc_results.mat\n');
 %  EXPORT TO TABLE FOR R (optional convenience)
 %  Creates a flat CSV with one row per subject per electrode
 % --------------------------------------------------------------------------
- 
+if ~exist(output_path, 'dir')
+    mkdir(output_path);
+end 
 fid = fopen(fullfile(output_path, 'gc_results_for_R.csv'), 'w');
 header = 'subject_id,dream,sleep_stage,n_beats,electrode,morder,spectral_radius';
 for b = 1:length(bands)
@@ -274,6 +317,10 @@ end
 for b = 1:length(bands)
     header = [header ',' sprintf('HRV_to_EEG_%s', bands{b})];
 end
+for b = 1:length(bands)
+    header = [header ',' sprintf('ARP_%s', bands{b})];
+end
+header = [header ',ARP_HRV'];
 fprintf(fid, '%s\n', header);
  
 for s = 1:length(gc_results)
@@ -291,12 +338,19 @@ for s = 1:length(gc_results)
             elec, ...
             r.morder, ...
             r.spectral_radius);
+        % GC values
         for b = 1:length(bands)
             row = [row ',' sprintf('%.8f', r.(['EEG_to_HRV_' bands{b}]))];
         end
         for b = 1:length(bands)
             row = [row ',' sprintf('%.8f', r.(['HRV_to_EEG_' bands{b}]))];
         end
+        % ARP values
+        for b = 1:length(bands)
+            row = [row ',' sprintf('%.8f', r.(['ARP_' bands{b}]))];
+        end
+        row = [row ',' sprintf('%.8f', r.ARP_HRV)];
+
         fprintf(fid, '%s\n', row);
     end
 end
@@ -304,73 +358,3 @@ end
 fclose(fid);
 fprintf('Flat CSV exported to gc_results_for_R.csv\n');
  
-%% Old part of demo
-% %% Model order estimation (<mvgc_schema.html#3 |A2|>)
-% 
-% 
-% % Select model order.
-% if     strcmpi(morder,'actual')
-%     morder = amo;
-%     fprintf('\nusing actual model order = %d\n',morder);
-% elseif strcmpi(morder,'AIC')
-%     morder = moAIC;
-%     fprintf('\nusing AIC best model order = %d\n',morder);
-% elseif strcmpi(morder,'BIC')
-%     morder = moBIC;
-%     fprintf('\nusing BIC best model order = %d\n',morder);
-% else
-%     fprintf('\nusing specified model order = %d\n',morder);
-% end
-% 
-% %% VAR model estimation (<mvgc_schema.html#3 |A2|>)
-% % Estimate VAR model of selected order from data.
-% ptic('\n*** tsdata_to_var... ');
-% [A,SIG] = tsdata_to_var(X,morder,regmode);
-% ptoc;
-% % Check for failed regression
-% assert(~isbad(A),'VAR estimation failed');
-% % NOTE: at this point we have a model and are finished with the data! - all
-% % subsequent calculations work from the estimated VAR parameters A and SIG.
-% %% Autocovariance calculation (<mvgc_schema.html#3 |A5|>)
-% % The autocovariance sequence drives many Granger causality calculations (see
-% % next section). Now we calculate the autocovariance sequence G according to the
-% % VAR model, to as many lags as it takes to decay to below the numerical
-% % tolerance level, or to acmaxlags lags if specified (i.e. non-empty).
-% ptic('*** var_to_autocov... ');
-% [G,info] = var_to_autocov(A,SIG,acmaxlags);
-% ptoc;
-% % The above routine does a LOT of error checking and issues useful diagnostics.
-% % If there are problems with your data (e.g. non-stationarity, colinearity,
-% % etc.) there's a good chance it'll show up at this point - and the diagnostics
-% % may supply useful information as to what went wrong. It is thus essential to
-% % report and check for errors here.
-% var_acinfo(info,true); % report results (and bail out on error)
-% %% Granger causality calculation: time domain  (<mvgc_schema.html#3 |A13|>)
-% % Calculate time-domain pairwise-conditional causalities - this just requires
-% % the autocovariance sequence.
-% ptic('*** autocov_to_pwcgc... ');
-% F = autocov_to_pwcgc(G);
-% ptoc;
-% % Check for failed GC calculation
-% assert(~isbad(F,false),'GC calculation failed');
-% % Significance test using theoretical null distribution, adjusting for multiple
-% % hypotheses.
-% pval = mvgc_pval(F,morder,nobs,ntrials,1,1,nvars-2,tstat); % take careful note of arguments!
-% sig  = significance(pval,alpha,mhtc);
-% % Plot time-domain causal graph, p-values and significance.
-% figure(2); clf;
-% sgtitlex('Pairwise-conditional Granger causality - time domain');
-% subplot(1,3,1);
-% plot_pw(F);
-% title('Pairwise-conditional GC');
-% subplot(1,3,2);
-% plot_pw(pval);
-% title('p-values');
-% subplot(1,3,3);
-% plot_pw(sig);
-% title(['Significant at p = ' num2str(alpha)])
-% % For good measure we calculate Seth's causal density (cd) measure - the mean
-% % pairwise-conditional causality. We don't have a theoretical sampling
-% % distribution for this.
-% cd = mean(F(~isnan(F)));
-% fprintf('\ncausal density = %f\n',cd);
