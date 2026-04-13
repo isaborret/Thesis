@@ -152,17 +152,29 @@ for s = 1:n_subjects
         % ARP_brain (per band): how self-predictable is EEG band power?
         % ARP_heart:            how self-predictable is HF-HRV?
         % -----------------------------------------------------------------
- 
+
         n_vars = size(X, 1);  % = 6
         ARP    = nan(n_vars, 1);
+        ARP_mord = nan(n_vars, 1);  % store selected univariate model orders
  
         for v = 1:n_vars
             x_v      = squeeze(X(v, :));              % [1 x n_beats]
             x_v_mvgc = reshape(x_v, 1, n_beats, 1);  % [1 x n_beats x 1]
             try
+                % Separate AIC model order selection for this univariate series
+                [~, ~, moAIC_uni, ~] = tsdata_to_infocrit(x_v_mvgc, momax, icregmode);
+                mord_uni = moAIC_uni;
+ 
+                % Guard against zero model order
+                if mord_uni < 1
+                    mord_uni = 1;
+                end
+                ARP_mord(v) = mord_uni;
+
+                % Fit univariate AR model of AIC-selected order
                 [A_uni, SIG_uni] = tsdata_to_var(x_v_mvgc, mord, regmode);
                 if ~isbad(A_uni)
-                    resid_var  = SIG_uni;       % scalar: residual variance of univariate AR
+                    resid_var  = SIG_uni(1,1);       % scalar: residual variance of univariate AR
                     total_var  = var(x_v);      % total variance of the series
                     if total_var > 0
                         ARP(v) = 1 - (resid_var / total_var);
@@ -173,16 +185,25 @@ for s = 1:n_subjects
             end
         end
  
-        % Store ARP — variable order matches X rows: 1-5 = EEG bands, 6 = HRV
+        % Store ARP and their model orders — variable order matches X rows: 1-5 = EEG bands, 6 = HRV
         gc_results(s).(elec).ARP_delta = ARP(1);
         gc_results(s).(elec).ARP_theta = ARP(2);
         gc_results(s).(elec).ARP_alpha = ARP(3);
         gc_results(s).(elec).ARP_sigma = ARP(4);
         gc_results(s).(elec).ARP_beta  = ARP(5);
         gc_results(s).(elec).ARP_HRV   = ARP(6);
+
+        gc_results(s).(elec).ARP_mord_delta = ARP_mord(1);
+        gc_results(s).(elec).ARP_mord_theta = ARP_mord(2);
+        gc_results(s).(elec).ARP_mord_alpha = ARP_mord(3);
+        gc_results(s).(elec).ARP_mord_sigma = ARP_mord(4);
+        gc_results(s).(elec).ARP_mord_beta  = ARP_mord(5);
+        gc_results(s).(elec).ARP_mord_HRV   = ARP_mord(6);
  
-        fprintf('  %s: ARP_HRV = %.4f | ARP_delta = %.4f | ARP_beta = %.4f\n', ...
-            elec, ARP(6), ARP(1), ARP(5));
+        
+        fprintf('  %s: ARP_HRV = %.4f (mord=%d) | ARP_delta = %.4f (mord=%d) | ARP_beta = %.4f (mord=%d)\n', ...
+            elec, ARP(6), ARP_mord(6), ARP(1), ARP_mord(1), ARP(5), ARP_mord(5));
+
  
         % -----------------------------------------------------------------
         % Step 3: Autocovariance sequence
