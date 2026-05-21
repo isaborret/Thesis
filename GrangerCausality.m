@@ -4,21 +4,11 @@
 
 %% References
 %
-% [1] L. Barnett and A. K. Seth,
+% L. Barnett and A. K. Seth,
 % <http://www.sciencedirect.com/science/article/pii/S0165027013003701 The MVGC
 %     Multivariate Granger Causality Toolbox: A New Approach to Granger-causal
 % Inference>, _J. Neurosci. Methods_ 223, 2014
 % [ <matlab:open('mvgc_preprint.pdf') preprint> ].
-%
-% [2] A. B. Barrett, L. Barnett and A. K. Seth, "Multivariate Granger causality
-% and generalized variance", _Phys. Rev. E_ 81(4), 2010.
-%
-% [3] L. Barnett and A. K. Seth, "Behaviour of Granger causality under
-% filtering: Theoretical invariance and practical application", _J. Neurosci.
-% Methods_ 201(2), 2011.
-%
-% (C) Lionel Barnett and Anil K. Seth, 2012. See file license.txt in
-% installation directory for licensing terms.
 
 %% Paths
 data_path = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data\derivatives\timeSeries';
@@ -26,7 +16,6 @@ output_path = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\da
 addpath(genpath('C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\toolboxes\MVGC_toolbox'));
 
 %% Parameters
-
 regmode   = 'LWR';  % VAR model estimation regression mode ('OLS', 'LWR' or empty for default)
 icregmode = 'LWR';  % information criteria regression mode ('OLS', 'LWR' or empty for default)
 morder    = 'AIC';  % model order to use ('actual', 'AIC', 'BIC' or supplied numerical value)
@@ -257,23 +246,6 @@ for s = 1:n_subjects
             gc_results(s).(elec) = [];
             continue
         end
-
-        % Significance test using theoretical null distribution, adjusting for multiple
-        % hypotheses.
-        % pval = mvgc_pval(F,morder,nobs,ntrials,1,1,nvars-2,tstat); % take careful note of arguments!
-        % sig  = significance(pval,alpha,mhtc);
-        % % Plot time-domain causal graph, p-values and significance.
-        % figure(2); clf;
-        % sgtitlex('Pairwise-conditional Granger causality - time domain');
-        % subplot(1,3,1);
-        % plot_pw(F);
-        % title('Pairwise-conditional GC');
-        % subplot(1,3,2);
-        % plot_pw(pval);
-        % title('p-values');
-        % subplot(1,3,3);
-        % plot_pw(sig);
-        % title(['Significant at p = ' num2str(alpha)])
  
         % -----------------------------------------------------------------
         % Step 5: Extract GC scalars of interest
