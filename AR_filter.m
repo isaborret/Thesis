@@ -29,7 +29,7 @@ for i = 2 : s1
 end 
 
 % "ritorno"
-% The same filter is applied again but running backwards through the signal. This is the zero-phase trick — running forward then backward cancels out any phase delay introduced by the filter
+% The same filter is applied again but running backwards through the signal. This is the zero-phase trick â€” running forward then backward cancels out any phase delay introduced by the filter
 fib(s1)=usc(s1);
 for i = (s1-1):-1:1
      fib(i)= p*fib(i+1)+(1-p)*usc(i);
@@ -40,14 +40,3 @@ end
 fia = s-fib+mean(s);
 % Subtracts the slow trend from the original, leaving only fast fluctuations
 % Adding mean(s) back preserves the DC level so the series stays centred around its original mean rather than around zero.
-
-
-% % crea un vettore contenente segnale filtrato e da filtrare 
-% % e li visualizza su un unico grafico
-% figure(2);
-% subplot(2,1,1);
-% plot ([s fib]),title('originale+passa basso');
-% zoom xon;
-% subplot(2,1,2);
-% plot ([s fia]),title('originale+passa alto');
-% zoom xon;
