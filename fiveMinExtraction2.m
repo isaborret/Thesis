@@ -1,22 +1,9 @@
 %% extract_all_subjects.m
 % Extracts 5 minutes of EEG and ECG immediately BEFORE the awakening
-% for all subjects in DREAM dataset 12, except subject 1.
+% for all subjects in DREAM dataset 12, except subject 1, due to insufficient pre-awakening data.
 %
 % Uses awakening clock time from Records.csv + EDF header start time
 % to locate the correct pre-awakening window.
-%
-% Output per subject: one .mat file, e.g. sub002_noDream_REM_last5min.mat
-%
-% Each .mat contains:
-%   EEG_data     [19 x 76800]   EEG signals
-%   ECG_data     [ 1 x 76800]   ECG signal
-%   EEG_labels   {1x19}         channel names
-%   fs           256             sampling rate (Hz)
-%   t            [1 x 76800]    time vector in seconds
-%   subject_id   string
-%   dream        logical         true = dream recall
-%   sleep_stage  string          'REM' or 'N2'
-%   n_samples    scalar          (= 76800)
 %
 % -------------------------------------------------------------------------
 % SET THESE PATHS BEFORE RUNNING
@@ -30,7 +17,7 @@ records_csv = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\da
 
 %% Setup
 fs        = 256;
-n_extract = fs * 5 * 60;   % 76800 samples
+n_extract = fs * 5 * 60;
 
 eeg_ch_idx = 1:19;
 ecg_ch_idx = 24;
