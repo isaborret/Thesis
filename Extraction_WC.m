@@ -17,8 +17,7 @@ end
 
 %base_tot =  ybands(end) - ybands(1); % Total bandwidth across all bands combined, used for normalisation
 
-% Parameters for the weighted covariance PSD estimation =>
-% CHECK!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+% Parameters for the weighted covariance PSD estimation
 nfft=512; %512 frequency bins
 Bw= 0.02; % bandwidth 0.02 Hz
 window= 'hamming'; 
@@ -46,7 +45,7 @@ input_dir = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data
 files     = dir(fullfile(input_dir, 'sub*.mat'));
 n_subj    = length(files);
 % Subjects to exclude from processing
-ignore_subs = {'sub001', 'sub013','sub022', 'sub027', 'sub039'};
+ignore_subs = {'sub001'};
 
 %% loop
 for isubj = 1:n_subj
@@ -66,8 +65,8 @@ for isubj = 1:n_subj
     tmp_rr = load(fullfile(input_dir, files(isubj).name));
 
     t           = tmp_rr.t;
-    ECG         = tmp_rr.ECG_data(:);    % ensure column vector [76800x1]
-    EEG         = tmp_rr.EEG_data;       % [19x76800]
+    ECG         = tmp_rr.ECG_data(:);    
+    EEG         = tmp_rr.EEG_data;       
     EEG_labels  = tmp_rr.EEG_labels;
     fs          = tmp_rr.fs;             % 256 Hz
 
@@ -106,21 +105,6 @@ for isubj = 1:n_subj
     [beatsRRI,tSeriesRRI,seriesRRI]=funct_ExtractTimeSeries(tPosRPeakECG,0);
     mean_RR = mean(seriesRRI); % Computes mean RR for the ±25% threshold
 
-    % % REMOVE AFTERWARDSSSSSSSSSSSS!!!!!!!!!!!!
-    % if isubj == 22
-    %     figure;
-    %     plot(t, ECG);
-    %     hold on;
-    %     plot(tPosRPeakECG, massimoRPeakECG, 'xr', 'MarkerSize', 10);
-    %     title('Subject 22 - R peaks');
-    % 
-    %     figure;
-    %     plot(seriesRRI);
-    %     title('Subject 22 - full RR series before selection');
-    %     yline(mean(seriesRRI)*1.25, 'r--');
-    %     yline(mean(seriesRRI)*0.75, 'r--');
-    % end
-
     % Step 4: Valid beat selection (+-25% mean RR threshold)
     % Iterates through all detected beats (u), accepting each beat into sel only if its RR interval is within ±25% of the mean. 
     % Keeps going until 300 valid beats are collected (k). seriesRRI_sel and tSeriesRRI_sel accumulate the valid RR intervals and their timestamps.
@@ -139,7 +123,7 @@ for isubj = 1:n_subj
         u = u+1;  
     end
 
-    % Check sufficient beats were found (new) => check!!!!!!!!!!
+    % Check sufficient beats were found
     if length(sel) < 200
         warning('Subject %s: only %d valid beats found, skipping.', ...
             files(isubj).name, length(sel));
@@ -151,11 +135,6 @@ for isubj = 1:n_subj
     fprintf('Before removeOutlier: seriesRRI_sel=%d, tSeriesRRI_sel=%d, n_beats=%d\n', ...
     length(seriesRRI_sel), length(tSeriesRRI_sel), n_beats);
 
-
-    % below was added by claude, but originally in the while loop
-    %seriesRRI_sel  = seriesRRI(sel);
-    %tSeriesRRI_sel = tSeriesRRI(sel);
-
     % Step 5: Secondary outlier correction on RR series => new!!
     seriesRRI_sel_corrected = removeOutlier(seriesRRI_sel, [], 'linear');
     %check whether series is shorter than expected
@@ -165,12 +144,12 @@ for isubj = 1:n_subj
     end
     seriesRRI_sel = seriesRRI_sel_corrected; % Overwrites seriesRRI_sel with the padded version 
 
-    % Store RR series => new!!
+    % Store RR series
     results(isubj).RRI      = seriesRRI_sel;
     results(isubj).tRRI     = tSeriesRRI_sel;
     results(isubj).n_beats  = n_beats;
 
-    %% HF-HRV extraction via SPWVD => new!
+    %% HF-HRV extraction via SPWVD 
     % Step 6: AR high-pass filter RR series
     RRI_filt = AR_filter(seriesRRI_sel', 1, pfilter);  % high-pass output, removes slow drift
 
@@ -178,24 +157,6 @@ for isubj = 1:n_subj
     fs_rri = 1000 / mean(seriesRRI_sel);
 
     % Step 7: Smoothed pseudo-Wigner-Ville distribution
-
-    % %% Added: 
-    % % Diagnostic check
-    % fprintf('Subject %s: n_beats=%d, NaN in RRI_filt=%d, Inf in RRI_filt=%d\n', ...
-    %     files(isubj).name, n_beats, sum(isnan(RRI_filt)), sum(isinf(RRI_filt)));
-    % fprintf('NaN in seriesRRI_sel=%d, Inf in seriesRRI_sel=%d\n', ...
-    %     sum(isnan(seriesRRI_sel)), sum(isinf(seriesRRI_sel)));
-    % if any(~isfinite(RRI_filt))
-    %     warning('Subject %s: non-finite values in RRI_filt, skipping HF-HRV extraction.', ...
-    %         files(isubj).name);
-    %     results(isubj).HFHRV = NaN;
-    % else
-    %     [TFR_RR, f_rr] = wvd(hilbert(RRI_filt - mean(RRI_filt)), fs_rri, ...
-    %         'smoothedPseudo', hamming(51), 'MinThreshold', 50);
-    %     % ... rest of HF-HRV extraction
-    % end
-  
-
     [TFR_RR, f_rr] = wvd(hilbert(RRI_filt - mean(RRI_filt)), fs_rri, ...
         'smoothedPseudo', hamming(51), 'MinThreshold', 50);
 
@@ -219,7 +180,6 @@ for isubj = 1:n_subj
         hfhrv(end+1:n_beats) = hfhrv(end); % extends the series to n_beats by repeating the last value
         results(isubj).HFHRV = hfhrv; % Writes the padded series back into the results struct
     end
-
 
     %% EEG band power extraction - Cz and Pz
     for ich = 1:2
@@ -256,13 +216,7 @@ for isubj = 1:n_subj
 
         % Limit PSD to 30 Hz
         ind_30Hz = find(f_WC <= 30);
-
-        % Outlier correction on EEG band power series
-        % PEEG_corrected = zeros(numel(name_bands), n_beats);
-        % for ibands = 1:numel(name_bands)
-        %     PEEG_corrected(ibands, :) = ...
-        %         removeOutlier(PEEG_raw(ibands, :));
-        % end
+        
         % Outlier correction on EEG band power series
         PEEG_corrected = zeros(numel(name_bands), n_beats);
         for ibands = 1:numel(name_bands)
@@ -283,12 +237,7 @@ for isubj = 1:n_subj
 
             PEEG_corrected(ibands, :) = corrected;
         end
-
-        % Outlier correction on full EEG PSD
-        % PSD_WC_corrected = zeros(length(ind_30Hz), n_beats);
-        % for ifreq = 1:length(ind_30Hz)
-        %     PSD_WC_corrected(ifreq, :) = removeOutlier(PSD_WC(ind_30Hz(ifreq), :));
-        % end
+        
         % Outlier correction on full EEG PSD
         PSD_WC_corrected = zeros(length(ind_30Hz), n_beats);
         for ifreq = 1:length(ind_30Hz)
@@ -309,94 +258,3 @@ end
 %% Save results
 save('C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data\derivatives\timeSeries\timeseries_results.mat', 'results', 'name_bands', 'ybands');
 fprintf('Done. Results saved.\n');
-
-    % Plots the ECG with red crosses at detected R-peaks and green shading over the first 300 valid beat windows. 
-    % Useful for visual verification but generates one figure per subject
-    % => remove this or add saveas to save figures and close to avoid 39
-    % open windows!!!!!!!!!!!!!!!!!!
-    % ymin = min(ECG)-0.1;
-    % ymax = max(ECG)+0.1;
-    % yBox = [ymin, ymax, ymax, ymin, ymin];
-    % figure;
-    % plot(t,ECG);
-    % hold on;
-    % plot(tPosRPeakECG,massimoRPeakECG,'xr','MarkerSize',10);
-    % for ic = 1:300
-    %      xBox1 = [tPosRPeakECG(sel(ic)), tPosRPeakECG(sel(ic)), tPosRPeakECG(sel(ic)+1),tPosRPeakECG(sel(ic)+1), tPosRPeakECG(sel(ic))];
-    %      patch(xBox1, yBox, 'black', 'FaceColor', 'green', 'FaceAlpha', 0.1);
-    %      % xline(tPosRPeakECG(sel(ic)),'r');
-    %     % xline(tPosRPeakECG(sel(ic)+1),':b');
-    % end
-    % ylim([ymin ymax])
-
-
-    %% EEG band power extraction
-%     % Loops over channels, z-scores the EEG to normalise amplitude across subjects and channels.
-%     for ich=1:numel(data(1).ch_label)
-%         PSD_WC = zeros(nfft, length(posRPeakECG));
-%         f_WC = zeros(nfft,1);
-%         var_WC = zeros(1,length(posRPeakECG)); 
-% 
-%         data_norm = zscore(data(isubj).EEG(ich,:));
-% 
-%         for k =1:400
-%             %% Estrazione serie di potenza EEG (già pre-preocessato)
-%             data_tmp= [data_norm(posRPeakECG(sel(k)):posRPeakECG(sel(k)+1))]; %% Beat-to-beat
-%             [var_WC(k), PSD_WC(:,k), f_WC(:,1)]=funct_CalcPSDmodified(data_tmp,Bw,window,nfft,fs,0); %%%Weighted Covariance Method - Non-parametric estimation 
-%             % P_tot_WC{isubj}(ich,k) = mean(PSD_WC(:,i))*base_tot;
-%             P_tot{isubj}(ich,k) = var(data_tmp); %%Potenza totale (coincide con la varianza)
-%             clear data_tmp
-%             for ibands = 1:numel(name_bands)
-%                 ind = find(f_WC>=ybands(ibands) & f_WC<ybands(ibands+1));
-%                 banda_f = f_WC(ind);
-%                 PEEG{ibands,isubj}(ich,k)= mean(PSD_WC(ind,k))*base_banda(ibands);
-%             end
-%         end
-%     end
-% end 
-
-%% Second loop — HRV extraction and outlier correction:
-% for isubj = 1:size(data,2)
-%     seriesRRI_sel = removeOutlier(seriesRRI_sel,'linear'); %%%Correzione - Remove Outliers
-%     %%Estrazione serie RMSSD
-%     % for i = 2:length(seriesRRI_sel)
-%     %     RMSSD_RRI(isubj,i-1) = seriesRRI_sel(i) - seriesRRI_sel(i-1); %%per la sincronizzazione con il battito cardiaco scarto il primo o l'ultimo punto nelle serie PEEG
-%     % end
-%     % RMSSD_RRI(isubj,:) = removeOutlier(RMSSD_RRI(isubj,:),'linear'); %%%Correzione - Remove Outliers
-%     %%Estrazione serie di potenza dell'intervallo RRI in banda HF e LF (Wigner-Ville Distribution) 
-%     RRI(isubj,:) = AR_filter(seriesRRI_sel',1,pfilter); % removes slow drift
-%     fs_rri = 1000/mean(RRI); 
-%     [TFR_RR, f] = wvd(hilbert(RRI(isubj,:)-mean(RRI(isubj,:))),fs_rri,'smoothedPseudo', hamming(51),'MinThreshold',50); % Computes the smoothed pseudo-Wigner-Ville distribution of the mean-subtracted, Hilbert-transformed RR series. The Hilbert transform creates the analytic signal needed for the SPWVD. hamming(51) is the smoothing window, MinThreshold=50 suppresses very small values.
-%     % CHECK ABOVE!!!!!!!!!!!!!!!!
-%     ind_RRLF = find(f >= 0.05 & f < 0.15);
-%     ind_RRHF = find(f >= 0.15 & f < 0.4);
-%     RRHF_f = f(ind_RRHF);
-%     RRLF_f = f(ind_RRLF);
-%     for l = 1:size(TFR_RR,2)
-%         P_RRHF(l) = (mean(TFR_RR(ind_RRHF,l),1)^2)*base_HF./(mean(TFR_RR(:,l),1)^2)*f(end);
-%         P_RRLF(l) = (mean(TFR_RR(ind_RRLF,l),1)^2)*base_LF./(mean(TFR_RR(:,l),1)^2)*f(end);
-%     end
-%     %%downsampling
-%     P_RRHF_down(isubj,:) = downsample(P_RRHF',2);
-%     P_RRLF_down(isubj,:) = downsample(P_RRLF',2);
-% 
-%     %%Correzione serie PEEG
-%     for ich = 1:numel(ch_label)
-%         for ibands = 1:numel(name_bands)
-%             PEEG_corrected{ibands,isubj}(ich,:) = removeOutlier(PEEG{ibands,isubj}(ich,:)); %%%Correzione - Remove Outliers (nearest)
-%         end
-%     end
-% end
-
-%% RICAMPIONAMENTO SERIE
-% if resampling == 1 
-%     t_uniform = tSeriesRRI_sel(1):passo:tSeriesRRI_sel(end); %% passo da variare in base alla risoluzione desiderata
-%     for isubj = 1:size(PEEG,2)
-%         RRI_resampled{ibands, isubj} = interp1(tSeriesRRI_sel, RRI(isubj,:)', t_uniform, 'spline')'; %% --> le serie derivate da RRI da ottenere di conseguenza alla stessa risoluzione temporale
-%         for ibands = 1:size(PEEG,1)
-%             for ich = 1: size(PEEG{ibands,isubj},1)
-%                 PEEG_resampled{ibands, isubj} = interp1(tSeriesRRI_sel, PEEG{ibands,isubj}(ich,:)', t_uniform, 'spline')';
-%             end
-%         end
-%     end
-% end
