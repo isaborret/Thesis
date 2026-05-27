@@ -16,6 +16,7 @@ output_path = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\da
 addpath(genpath('C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\toolboxes\MVGC_toolbox'));
 
 %% Parameters
+
 regmode   = 'LWR';  % VAR model estimation regression mode ('OLS', 'LWR' or empty for default)
 icregmode = 'LWR';  % information criteria regression mode ('OLS', 'LWR' or empty for default)
 morder    = 'AIC';  % model order to use ('actual', 'AIC', 'BIC' or supplied numerical value)
@@ -25,12 +26,7 @@ tstat     = '';     % statistical test for MVGC:  'F' for Granger's F-test (defa
 alpha     = 0.05;   % significance level for significance test
 
 electrodes = {'Cz', 'Pz'};
-bands      = {'delta', 'theta', 'alpha', 'sigma', 'beta'};
-
-% mhtc      = 'FDR';  % multiple hypothesis test correction (see routine 'significance') => ???????
-% fs        = 200;    % sample rate (Hz)
-% fres      = [];     % frequency resolution (empty for automatic calculation)
-% seed      = 0;      % random seed (0 for unseeded)
+bands      = {'delta', 'theta', 'alpha', 'beta', 'gamma'};
 
 %% LOAD DATA
 load(fullfile(data_path, 'timeseries_results.mat'), 'results');  % loads struct array 'results'
@@ -57,8 +53,8 @@ for s = 1:n_subjects
  
         % -----------------------------------------------------------------
         % Assemble the 6 x n_beats data matrix X
-        % Row order: [delta; theta; alpha; sigma; beta; HFHRV]
-        % Variable indices: 1=delta, 2=theta, 3=alpha, 4=sigma, 5=beta, 6=HRV
+        % Row order: [delta; theta; alpha; beta; gamma; HFHRV]
+        % Variable indices: 1=delta, 2=theta, 3=alpha, 4=beta, 5=gamma, 6=HRV
         % -----------------------------------------------------------------
 
         try
@@ -100,15 +96,6 @@ for s = 1:n_subjects
             % the order at which AIC is minimised (moAIC),
             % the order at which BIC is minimised (moBIC).
         
-        % Plot information criteria
-        % figure(1); clf;
-        % plot_tsdata([AIC BIC]',{'AIC','BIC'},1/fs);
-        % title('Model order estimation');
-        % amo = size(AT,3); % actual model order
-        % fprintf('\nbest model order (AIC) = %d\n',moAIC);
-        % fprintf('best model order (BIC) = %d\n',moBIC);
-        % fprintf('actual model order     = %d\n',amo);
-        
         if strcmpi(morder, 'AIC')
             mord = moAIC;   % mord
         else
@@ -141,7 +128,7 @@ for s = 1:n_subjects
         % ARP_brain (per band): how self-predictable is EEG band power?
         % ARP_heart:            how self-predictable is HF-HRV?
         % -----------------------------------------------------------------
-
+ 
         n_vars = size(X, 1);  % = 6
         ARP    = nan(n_vars, 1);
         ARP_mord = nan(n_vars, 1);  % store selected univariate model orders
@@ -178,21 +165,20 @@ for s = 1:n_subjects
         gc_results(s).(elec).ARP_delta = ARP(1);
         gc_results(s).(elec).ARP_theta = ARP(2);
         gc_results(s).(elec).ARP_alpha = ARP(3);
-        gc_results(s).(elec).ARP_sigma = ARP(4);
-        gc_results(s).(elec).ARP_beta  = ARP(5);
+        gc_results(s).(elec).ARP_beta  = ARP(4);
+        gc_results(s).(elec).ARP_gamma = ARP(5);
         gc_results(s).(elec).ARP_HRV   = ARP(6);
 
         gc_results(s).(elec).ARP_mord_delta = ARP_mord(1);
         gc_results(s).(elec).ARP_mord_theta = ARP_mord(2);
         gc_results(s).(elec).ARP_mord_alpha = ARP_mord(3);
-        gc_results(s).(elec).ARP_mord_sigma = ARP_mord(4);
-        gc_results(s).(elec).ARP_mord_beta  = ARP_mord(5);
+        gc_results(s).(elec).ARP_mord_beta  = ARP_mord(4);
+        gc_results(s).(elec).ARP_mord_gamma = ARP_mord(5);
         gc_results(s).(elec).ARP_mord_HRV   = ARP_mord(6);
  
         
         fprintf('  %s: ARP_HRV = %.4f (mord=%d) | ARP_delta = %.4f (mord=%d) | ARP_beta = %.4f (mord=%d)\n', ...
             elec, ARP(6), ARP_mord(6), ARP(1), ARP_mord(1), ARP(5), ARP_mord(5));
-
  
         % -----------------------------------------------------------------
         % Step 3: Autocovariance sequence
@@ -246,7 +232,7 @@ for s = 1:n_subjects
             gc_results(s).(elec) = [];
             continue
         end
- 
+        
         % -----------------------------------------------------------------
         % Step 5: Extract GC scalars of interest
         %   five values from row 6 (HRV as target, each EEG band as source, giving EEG-to-HRV GC) 
@@ -257,7 +243,7 @@ for s = 1:n_subjects
  
         for b = 1:length(bands)
             band = bands{b};
-            band_idx = b;   % delta=1, theta=2, alpha=3, sigma=4, beta=5
+            band_idx = b;   % delta=1, theta=2, alpha=3, beta=4, gamma=5
  
             % GC from EEG band to HRV
             gc_results(s).(elec).(['EEG_to_HRV_' band]) = F(6, band_idx);
@@ -351,3 +337,4 @@ end
 fclose(fid);
 fprintf('Flat CSV exported to gc_results_for_R.csv\n');
  
+
