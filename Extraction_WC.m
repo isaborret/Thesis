@@ -5,19 +5,16 @@ addpath(genpath("C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\
 
 %% Parameters
 % frequency bands
-name_bands = {'delta', 'theta', 'alpha', 'sigma', 'beta'};
-ybands = [0.5, 4.0, 8.0, 12.0, 16.0, 25.0]; 
+name_bands = {'delta', 'theta', 'alpha', 'beta', 'gamma'};
+ybands = [0.5, 4.0, 8.0, 12.0, 30.0, 50.0]; 
 
-
-% Computes the bandwidth of each band (e.g. delta = 4-0.5 = 3.5 Hz)
+% Computes the bandwidth of each band 
 % This is used later to scale the power estimates correctly — multiplying mean PSD by bandwidth gives total power in that band.
 for ibands = 1:length(ybands)-1 
     base_banda(ibands) = ybands(ibands+1)-ybands(ibands);
 end
 
-%base_tot =  ybands(end) - ybands(1); % Total bandwidth across all bands combined, used for normalisation
-
-% Parameters for the weighted covariance PSD estimation
+% Parameters for the weighted covariance PSD estimation 
 nfft=512; %512 frequency bins
 Bw= 0.02; % bandwidth 0.02 Hz
 window= 'hamming'; 
@@ -32,20 +29,13 @@ base_tot= spectrum(3)-spectrum(1); % total HRV band width
 % Beat selection => check!!!!!!!! (new)
 max_beats = 300; % conservative limit for 5-minute epochs
 
-
-% sampling rate and channel labels taken from first subject (assumed identical across subjects)
-% fs = data(1).fs;
-% ch_label = data(1).ch_label;
-% resampling = 0; % 0= resampling is off
-% passo = 1; %% 1 s - 1 Hz, 2 s - 0.5 Hz, 0.5 s - 2 Hz
-
 %% Load and process subjects
 input_dir = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data\derivatives\preprocessed_eeg\clean_mat'
 %input_dir = 'C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data\derivatives\5_minuteExtractionRawEEGandECG';
 files     = dir(fullfile(input_dir, 'sub*.mat'));
 n_subj    = length(files);
 % Subjects to exclude from processing
-ignore_subs = {'sub001'};
+ignore_subs = {'sub001', 'sub013','sub022', 'sub027', 'sub039'};
 
 %% loop
 for isubj = 1:n_subj
@@ -60,13 +50,12 @@ for isubj = 1:n_subj
 
     fprintf('Processing subject %d of %d: %s\n', isubj, n_subj, files(isubj).name);
     
-
     %% Load subject data
     tmp_rr = load(fullfile(input_dir, files(isubj).name));
 
     t           = tmp_rr.t;
-    ECG         = tmp_rr.ECG_data(:);    
-    EEG         = tmp_rr.EEG_data;       
+    ECG         = tmp_rr.ECG_data(:);    % ensure column vector [76800x1]
+    EEG         = tmp_rr.EEG_data;       % [19x76800]
     EEG_labels  = tmp_rr.EEG_labels;
     fs          = tmp_rr.fs;             % 256 Hz
 
@@ -84,16 +73,10 @@ for isubj = 1:n_subj
         continue
     end
 
-
     %% Store metadata
     results(isubj).subject_id  = tmp_rr.subject_id;
     results(isubj).dream       = tmp_rr.dream;
     results(isubj).sleep_stage = tmp_rr.sleep_stage;
-    
-    %% ECG pipeline
-    %%% filtering: 4th order Butterworth filter (passband: 0.1-20Hz) --> in questo dataset già filtrato
-    % t = data(isubj).t;
-    % ECG = data(isubj).ECG;
 
     % Step 1: R-peak detection (Pan-Tompkins)
     [t_PT, ECG_PT, posMassimoPT, tMassimoPT, massimoPT] = functECG_PanTompkins(t, ECG); % Runs Pan-Tompkins on raw ECG → candidate R-peak positions. stayed the same
@@ -123,7 +106,7 @@ for isubj = 1:n_subj
         u = u+1;  
     end
 
-    % Check sufficient beats were found
+    % Check sufficient beats were found (new) => check!!!!!!!!!!
     if length(sel) < 200
         warning('Subject %s: only %d valid beats found, skipping.', ...
             files(isubj).name, length(sel));
@@ -144,12 +127,12 @@ for isubj = 1:n_subj
     end
     seriesRRI_sel = seriesRRI_sel_corrected; % Overwrites seriesRRI_sel with the padded version 
 
-    % Store RR series
+    % Store RR series => new!!
     results(isubj).RRI      = seriesRRI_sel;
     results(isubj).tRRI     = tSeriesRRI_sel;
     results(isubj).n_beats  = n_beats;
 
-    %% HF-HRV extraction via SPWVD 
+    %% HF-HRV extraction via SPWVD => new!
     % Step 6: AR high-pass filter RR series
     RRI_filt = AR_filter(seriesRRI_sel', 1, pfilter);  % high-pass output, removes slow drift
 
@@ -180,6 +163,7 @@ for isubj = 1:n_subj
         hfhrv(end+1:n_beats) = hfhrv(end); % extends the series to n_beats by repeating the last value
         results(isubj).HFHRV = hfhrv; % Writes the padded series back into the results struct
     end
+
 
     %% EEG band power extraction - Cz and Pz
     for ich = 1:2
@@ -216,7 +200,7 @@ for isubj = 1:n_subj
 
         % Limit PSD to 30 Hz
         ind_30Hz = find(f_WC <= 30);
-        
+
         % Outlier correction on EEG band power series
         PEEG_corrected = zeros(numel(name_bands), n_beats);
         for ibands = 1:numel(name_bands)
@@ -227,7 +211,6 @@ for isubj = 1:n_subj
                 corrected(end+1:n_beats) = corrected(end); % if one sample was deleted from the edge, restore it by repeating the last value
             end
 
-
             % Check whether any values in corrected are NaN (clustered outliers)
             if any(isnan(corrected))
                 nan_idx = isnan(corrected); % Creates a logical vector of the same length as corrected, where true marks NaN positions and false marks valid positions
@@ -237,7 +220,7 @@ for isubj = 1:n_subj
 
             PEEG_corrected(ibands, :) = corrected;
         end
-        
+
         % Outlier correction on full EEG PSD
         PSD_WC_corrected = zeros(length(ind_30Hz), n_beats);
         for ifreq = 1:length(ind_30Hz)
@@ -258,3 +241,4 @@ end
 %% Save results
 save('C:\Users\Isa\OneDrive\Documenten\Unif 2e master\Masterproef_II\data\derivatives\timeSeries\timeseries_results.mat', 'results', 'name_bands', 'ybands');
 fprintf('Done. Results saved.\n');
+
